@@ -19,14 +19,30 @@ def generate_form_fields(data, types, parent_key=''):
             html += generate_form_fields(value, types.get(key, {}), current_key)
             html += "</fieldset>"
         else:
-            field_type = types.get(key, 'str')
-            input_type = 'number' if field_type == 'int' else 'text'
-            html += f"""
-            <div style="margin: 10px;">
-                <label>{key}:</label>
-                <input type="{input_type}" name="{current_key}" value='{value}'>
-            </div>
-            """
+            field_type = types.get(key, 'str').lower()
+            
+            # Handle boolean type
+            if field_type == 'bool':
+                checked_true = 'selected' if str(value).lower() == 'true' else ''
+                checked_false = 'selected' if str(value).lower() == 'false' else ''
+                html += f"""
+                <div style="margin: 10px;">
+                    <label>{key}:</label>
+                    <select name="{current_key}">
+                        <option value="true" {checked_true}>True</option>
+                        <option value="false" {checked_false}>False</option>
+                    </select>
+                </div>
+                """
+            else:
+                # Existing type handling
+                input_type = 'number' if field_type == 'int' else 'text'
+                html += f"""
+                <div style="margin: 10px;">
+                    <label>{key}:</label>
+                    <input type="{input_type}" name="{current_key}" value='{value}'>
+                </div>
+                """
     return html
 
 def parse_form_data(flat_data):
@@ -45,12 +61,16 @@ def validate_and_convert(data, types):
         if isinstance(value, dict):
             validated[key] = validate_and_convert(value, types.get(key, {}))
         else:
-            type_func = str
-            if types.get(key) == 'int':
+            field_type = types.get(key, 'str').lower()
+            
+            if field_type == 'int':
                 try:
                     value = int(value)
                 except ValueError:
                     pass
+            elif field_type == 'bool':
+                value = value.lower() == 'true'
+            
             validated[key] = value
     return validated
 

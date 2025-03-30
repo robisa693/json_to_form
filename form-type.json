@@ -2,7 +2,8 @@
     "network": {
       "vlans": {
         "vlan_id": "int",
-        "NIC": "str"
+        "NIC": "str",
+        "Enabled": "bool"
       },
       "settings": {
         "ip_address": "str",
