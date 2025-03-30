@@ -1,0 +1,12 @@
+{
+    "network": {
+      "vlans": {
+        "vlan_id": "int",
+        "NIC": "str"
+      },
+      "settings": {
+        "ip_address": "str",
+        "subnet_mask": "str"
+      }
+    }
+  }
