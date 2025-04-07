@@ -1,12 +1,16 @@
 {
     "network": {
         "vlans": {
-            "vlan_id": 23,
+            "vlan_id": [
+                25,
+                23,
+                25
+            ],
             "NIC": "",
-            "Enabled": "False"
+            "Enabled": true
         },
         "settings": {
-            "ip_address": "192.168.1.1",
+            "ip_address": "25",
             "subnet_mask": "255.255.255.0"
         }
     }

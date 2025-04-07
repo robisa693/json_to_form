@@ -19,10 +19,24 @@ def generate_form_fields(data, types, parent_key=''):
             html += generate_form_fields(value, types.get(key, {}), current_key)
             html += "</fieldset>"
         else:
-            field_type = types.get(key, 'str').lower()
+            field_type = str(types.get(key, 'str')).lower()
             
-            # Handle boolean type
-            if field_type == 'bool':
+            # List type handling
+            if field_type.startswith('list['):
+                element_type = field_type[5:-1].strip()
+                list_values = value if isinstance(value, list) else []
+                current_value = ', '.join(map(str, list_values))
+                html += f"""
+                <div style="margin: 10px;">
+                    <label>{key}:</label>
+                    <input type="text" name="{current_key}" value='{current_value}'>
+                    <span style="font-size: 0.8em; color: #666;">
+                        (comma-separated {element_type} values)
+                    </span>
+                </div>
+                """
+            # Boolean handling
+            elif field_type == 'bool':
                 checked_true = 'selected' if str(value).lower() == 'true' else ''
                 checked_false = 'selected' if str(value).lower() == 'false' else ''
                 html += f"""
@@ -34,8 +48,8 @@ def generate_form_fields(data, types, parent_key=''):
                     </select>
                 </div>
                 """
+            # Other types
             else:
-                # Existing type handling
                 input_type = 'number' if field_type == 'int' else 'text'
                 html += f"""
                 <div style="margin: 10px;">
@@ -61,17 +75,36 @@ def validate_and_convert(data, types):
         if isinstance(value, dict):
             validated[key] = validate_and_convert(value, types.get(key, {}))
         else:
-            field_type = types.get(key, 'str').lower()
+            field_type = str(types.get(key, 'str')).lower()
             
-            if field_type == 'int':
-                try:
-                    value = int(value)
-                except ValueError:
-                    pass
+            # List type conversion
+            if field_type.startswith('list['):
+                element_type = field_type[5:-1].strip().lower()
+                elements = [e.strip() for e in value.split(',') if e.strip()]
+                converted = []
+                for e in elements:
+                    try:
+                        if element_type == 'int':
+                            converted.append(int(e))
+                        elif element_type == 'bool':
+                            converted.append(e.lower() == 'true')
+                        else:  # str or unknown types
+                            converted.append(e)
+                    except ValueError:
+                        converted.append(e)
+                validated[key] = converted
+            # Boolean conversion
             elif field_type == 'bool':
-                value = value.lower() == 'true'
-            
-            validated[key] = value
+                validated[key] = value.lower() == 'true'
+            # Integer conversion
+            elif field_type == 'int':
+                try:
+                    validated[key] = int(value)
+                except ValueError:
+                    validated[key] = value
+            # String (default)
+            else:
+                validated[key] = value
     return validated
 
 @app.route('/', methods=['GET'])
@@ -83,9 +116,21 @@ def show_form():
     <head>
         <title>Dynamic Form</title>
         <style>
-            fieldset {{ margin: 20px; padding: 20px; }}
-            legend {{ font-weight: bold; }}
-            input {{ margin-left: 10px; }}
+            fieldset {{ 
+                margin: 20px; 
+                padding: 20px; 
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }}
+            legend {{ 
+                font-weight: bold;
+                padding: 0 10px;
+            }}
+            input, select {{ 
+                margin-left: 10px; 
+                padding: 5px;
+            }}
+            div {{ margin: 10px 0; }}
         </style>
     </head>
     <body>
@@ -93,7 +138,7 @@ def show_form():
         <form method="POST" action="/submit">
             {form_html}
             <div style="margin: 20px;">
-                <input type="submit" value="Submit">
+                <input type="submit" value="Submit" style="padding: 10px 20px;">
             </div>
         </form>
     </body>
@@ -109,10 +154,22 @@ def submit_form():
         json.dump(validated_data, f, indent=4)
     
     return '''
-    <h1>Form Submitted Successfully</h1>
-    <p>Check submitted_form.json for the results</p>
-    <a href="/">Back to form</a>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Form Submitted</title>
+        <style>
+            body {{ padding: 20px; font-family: Arial, sans-serif; }}
+            a {{ color: #0066cc; text-decoration: none; }}
+        </style>
+    </head>
+    <body>
+        <h1>Form Submitted Successfully</h1>
+        <p>Check submitted_form.json for the results</p>
+        <a href="/">&larr; Back to form</a>
+    </body>
+    </html>
     '''
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8000, debug=True)
