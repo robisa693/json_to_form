@@ -1,7 +1,7 @@
 {
     "network": {
       "vlans": {
-        "vlan_id": "int",
+        "vlan_id": "list[int]",
         "NIC": "str",
         "Enabled": "bool"
       },

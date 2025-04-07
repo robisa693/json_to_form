@@ -19,10 +19,34 @@ def generate_form_fields(data, types, parent_key=''):
             html += generate_form_fields(value, types.get(key, {}), current_key)
             html += "</fieldset>"
         else:
-            field_type = types.get(key, 'str').lower()
+            field_type = str(types.get(key, 'str')).lower()
             
-            # Handle boolean type
-            if field_type == 'bool':
+            if field_type.startswith('list['):
+                element_type = field_type[5:-1].strip()
+                list_values = value if isinstance(value, list) else []
+                html += f"""
+                <div style="margin: 10px;">
+                    <label>{key}:</label>
+                    <div class="list-container" data-key="{current_key}">
+                        {"".join([f'''
+                        <div class="list-item">
+                            <input type="text" name="{current_key}.{i}" 
+                                   value="{item}" 
+                                   oninput="handleListInput(event, '{current_key}')">
+                            <button type="button" {'style="display: none;"' if i == 0 else ''} 
+                                    onclick="removeListItem(event, '{current_key}')">×</button>
+                        </div>
+                        ''' for i, item in enumerate(list_values)])}
+                        <div class="list-item">
+                            <input type="text" name="{current_key}.{len(list_values)}" 
+                                   oninput="handleListInput(event, '{current_key}')">
+                            <button type="button" style="display: none;" 
+                                    onclick="removeListItem(event, '{current_key}')">×</button>
+                        </div>
+                    </div>
+                </div>
+                """
+            elif field_type == 'bool':
                 checked_true = 'selected' if str(value).lower() == 'true' else ''
                 checked_false = 'selected' if str(value).lower() == 'false' else ''
                 html += f"""
@@ -35,7 +59,6 @@ def generate_form_fields(data, types, parent_key=''):
                 </div>
                 """
             else:
-                # Existing type handling
                 input_type = 'number' if field_type == 'int' else 'text'
                 html += f"""
                 <div style="margin: 10px;">
@@ -59,19 +82,36 @@ def validate_and_convert(data, types):
     validated = {}
     for key, value in data.items():
         if isinstance(value, dict):
-            validated[key] = validate_and_convert(value, types.get(key, {}))
+            field_type = str(types.get(key, 'str')).lower()
+            if field_type.startswith('list['):
+                # Convert numbered keys to sorted list
+                elements = [v for k, v in sorted(value.items(), key=lambda x: int(x[0]))]
+                element_type = field_type[5:-1].strip().lower()
+                converted = []
+                for e in elements:
+                    try:
+                        if element_type == 'int':
+                            converted.append(int(e))
+                        elif element_type == 'bool':
+                            converted.append(e.lower() == 'true')
+                        else:
+                            converted.append(e)
+                    except ValueError:
+                        converted.append(e)
+                validated[key] = converted
+            else:
+                validated[key] = validate_and_convert(value, types.get(key, {}))
         else:
-            field_type = types.get(key, 'str').lower()
-            
-            if field_type == 'int':
+            field_type = str(types.get(key, 'str')).lower()
+            if field_type == 'bool':
+                validated[key] = value.lower() == 'true'
+            elif field_type == 'int':
                 try:
-                    value = int(value)
+                    validated[key] = int(value)
                 except ValueError:
-                    pass
-            elif field_type == 'bool':
-                value = value.lower() == 'true'
-            
-            validated[key] = value
+                    validated[key] = value
+            else:
+                validated[key] = value
     return validated
 
 @app.route('/', methods=['GET'])
@@ -83,9 +123,39 @@ def show_form():
     <head>
         <title>Dynamic Form</title>
         <style>
-            fieldset {{ margin: 20px; padding: 20px; }}
-            legend {{ font-weight: bold; }}
-            input {{ margin-left: 10px; }}
+            fieldset {{
+                margin: 20px; 
+                padding: 20px; 
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }}
+            legend {{
+                font-weight: bold;
+                padding: 0 10px;
+            }}
+            input, select {{
+                margin-left: 10px; 
+                padding: 5px;
+            }}
+            .list-item {{
+                margin: 5px 0;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }}
+            .list-item button {{
+                cursor: pointer;
+                background: #ff4444;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                display: inline-block;
+            }}
+            .list-item button[style*="none"] {{
+                display: none !important;
+            }}
         </style>
     </head>
     <body>
@@ -93,9 +163,62 @@ def show_form():
         <form method="POST" action="/submit">
             {form_html}
             <div style="margin: 20px;">
-                <input type="submit" value="Submit">
+                <input type="submit" value="Submit" style="padding: 10px 20px;">
             </div>
         </form>
+
+        <script>
+            function handleListInput(event, baseKey) {{
+                const container = event.target.closest('.list-container');
+                const items = container.querySelectorAll('.list-item');
+                const input = event.target;
+                
+                // Only process if the changed input is the last one
+                if (input === items[items.length - 1].querySelector('input')) {{
+                    // Add new field if last input has value
+                    if (input.value.trim() !== '') {{
+                        const newItem = document.createElement('div');
+                        newItem.className = 'list-item';
+                        newItem.innerHTML = `
+                            <input type="text" 
+                                   oninput="handleListInput(event, '${{baseKey}}')">
+                            <button type="button" 
+                                    onclick="removeListItem(event, '${{baseKey}}')">×</button>
+                        `;
+                        container.appendChild(newItem);
+                    }}
+                }}
+                
+                // Cleanup empty middle fields (skip first and last)
+                Array.from(items).slice(1, -1).forEach((item) => {{
+                    const itemInput = item.querySelector('input');
+                    if (itemInput.value.trim() === '') {{
+                        item.remove();
+                    }}
+                }});
+                
+                // Always update field names after changes
+                updateFieldNames(container, baseKey);
+            }}
+
+            function removeListItem(event, baseKey) {{
+                const item = event.target.closest('.list-item');
+                const container = item.closest('.list-container');
+                if (container.querySelectorAll('.list-item').length > 1) {{
+                    item.remove();
+                    updateFieldNames(container, baseKey);
+                }}
+            }}
+
+            function updateFieldNames(container, baseKey) {{
+                Array.from(container.querySelectorAll('.list-item')).forEach((item, index) => {{
+                    const input = item.querySelector('input');
+                    input.name = `${{baseKey}}.${{index}}`;
+                    const button = item.querySelector('button');
+                    button.style.display = index === 0 ? 'none' : 'inline-block';
+                }});
+            }}
+        </script>
     </body>
     </html>
     """)
@@ -109,10 +232,22 @@ def submit_form():
         json.dump(validated_data, f, indent=4)
     
     return '''
-    <h1>Form Submitted Successfully</h1>
-    <p>Check submitted_form.json for the results</p>
-    <a href="/">Back to form</a>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Form Submitted</title>
+        <style>
+            body {{ padding: 20px; font-family: Arial, sans-serif; }}
+            a {{ color: #0066cc; text-decoration: none; }}
+        </style>
+    </head>
+    <body>
+        <h1>Form Submitted Successfully</h1>
+        <p>Check submitted_form.json for the results</p>
+        <a href="/">&larr; Back to form</a>
+    </body>
+    </html>
     '''
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8000, debug=True)

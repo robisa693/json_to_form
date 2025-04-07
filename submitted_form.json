@@ -1,9 +1,14 @@
 {
     "network": {
         "vlans": {
-            "vlan_id": 23,
-            "NIC": "",
-            "Enabled": "False"
+            "vlan_id": [
+                23,
+                25,
+                26,
+                27
+            ],
+            "NIC": "vxnet0",
+            "Enabled": true
         },
         "settings": {
             "ip_address": "192.168.1.1",
